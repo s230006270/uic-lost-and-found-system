@@ -1,0 +1,574 @@
+import tkinter as tk
+from tkinter import messagebox
+import pandas as pd  # Import pandas library
+
+# Assume we use a dictionary to store user information
+users = {"admin": "admin123"}  # Add admin account
+# Store lost item registration information
+lost_items = []
+
+
+# Connect to Excel file and import data
+def load_data_from_excel():
+    global lost_items
+    df = pd.read_excel('lostfound.xlsx')  # Ensure the Excel file is in the current working directory
+
+    for _, row in df.iterrows():
+        lost_items.append({
+            "item_id": row['item_id'],
+            "name": row['name'],
+            "description": row['description'],
+            "time": row['time'],
+            "location": row['location'],
+            "reported_user": row['reported_user'],  # Use reported_user
+            "status": row['status'],
+            "claimed_user": row['claimed_user'],
+            "pending": row['pending']  # Use pending
+        })
+
+
+# Load data when the program starts
+load_data_from_excel()
+
+
+def create_login_window():
+    window = tk.Tk()
+    window.title("User Login")
+
+    tk.Label(window, text="Username").grid(row=0)
+    tk.Label(window, text="Password").grid(row=1)
+
+    username_entry = tk.Entry(window)
+    password_entry = tk.Entry(window, show='*')
+
+    username_entry.grid(row=0, column=1)
+    password_entry.grid(row=1, column=1)
+
+    tk.Button(window, text='Login', command=lambda: login(username_entry.get(), password_entry.get())).grid(row=2,
+                                                                                                            column=0)
+    tk.Button(window, text='Register', command=create_register_window).grid(row=2, column=1)
+
+    window.mainloop()
+
+
+def login(username, password):
+    if username in users and users[username] == password:
+        messagebox.showinfo("Success", "Login successful!")
+        if username == "admin":
+            create_admin_menu()  # Admin login
+        else:
+            create_main_menu(username)  # Regular user login
+    else:
+        messagebox.showerror("Error", "Invalid username or password!")
+
+
+def create_main_menu(username):
+    menu_window = tk.Toplevel()
+    menu_window.title("Main Menu")
+
+    tk.Label(menu_window, text=f"Welcome, {username}").pack()
+
+    tk.Button(menu_window, text='Report Lost Item', command=lambda: create_report_item_window(username)).pack()
+    tk.Button(menu_window, text='Claim Item', command=create_claim_item_window).pack()
+    tk.Button(menu_window, text='Exit System', command=menu_window.destroy).pack()
+
+
+def create_admin_menu():
+    admin_window = tk.Toplevel()
+    admin_window.title("Admin Menu")
+
+    tk.Button(admin_window, text='Report Lost Item', command=create_report_item_window_admin).pack()
+    tk.Button(admin_window, text='Manage Lost Items', command=create_manage_items_window).pack()
+    tk.Button(admin_window, text='Pending Claims', command=create_pending_claims_window).pack()
+    tk.Button(admin_window, text='Exit System', command=admin_window.destroy).pack()
+
+
+def create_register_window():
+    reg_window = tk.Toplevel()
+    reg_window.title("User Registration")
+
+    tk.Label(reg_window, text="Username (Email)").grid(row=0)
+    tk.Label(reg_window, text="Password").grid(row=1)
+
+    reg_username_entry = tk.Entry(reg_window)
+    reg_password_entry = tk.Entry(reg_window, show='*')
+
+    reg_username_entry.grid(row=0, column=1)
+    reg_password_entry.grid(row=1, column=1)
+
+    tk.Button(reg_window, text='Register',
+              command=lambda: register(reg_window, reg_username_entry.get(), reg_password_entry.get())).grid(row=2,
+                                                                                                             column=1)
+
+
+def register(reg_window, username, password):
+    if not username.endswith('@mail.uic.edu.cn'):
+        messagebox.showerror("Error", "Please enter a campus email address!")
+    elif username in users:
+        messagebox.showerror("Error", "Username already exists!")
+    else:
+        users[username] = password  # Save user information
+        messagebox.showinfo("Success", "Registration successful!")
+        reg_window.destroy()  # Close registration window
+
+
+def create_report_item_window(username):
+    report_window = tk.Toplevel()
+    report_window.title("Report Lost Item")
+
+    tk.Label(report_window, text="Item Name").grid(row=0)
+    tk.Label(report_window, text="Item Description").grid(row=1)
+    tk.Label(report_window, text="Found Time (YYYY-MM-DD)").grid(row=2)
+    tk.Label(report_window, text="Found Location").grid(row=3)
+
+    item_name_entry = tk.Entry(report_window)
+    item_description_text = tk.Text(report_window, height=5, width=40)  # Multi-line text box
+    found_year_entry = tk.Entry(report_window, width=4)
+    found_month_entry = tk.Entry(report_window, width=2)
+    found_day_entry = tk.Entry(report_window, width=2)
+    found_location_entry = tk.Entry(report_window)
+
+    item_name_entry.grid(row=0, column=1)
+    item_description_text.grid(row=1, column=1)
+    found_year_entry.grid(row=2, column=1)
+    found_month_entry.grid(row=2, column=2)
+    found_day_entry.grid(row=2, column=3)
+    found_location_entry.grid(row=3, column=1)
+
+    tk.Button(report_window, text='Complete',
+              command=lambda: validate_and_report(report_window, username, item_name_entry.get(),
+                                                  item_description_text.get("1.0", tk.END).strip(),
+                                                  found_year_entry.get(), found_month_entry.get(),
+                                                  found_day_entry.get(), found_location_entry.get())).grid(row=4,
+                                                                                                           column=0)
+
+    tk.Button(report_window, text='Manage My Report', command=lambda: create_user_items_window(username)).grid(row=4,
+                                                                                                               column=1)
+    tk.Button(report_window, text='Return to Main Menu', command=report_window.destroy).grid(row=5, column=0)
+
+
+def validate_and_report(report_window, username, item_name, item_description, year, month, day, location):
+    # Check if any field is empty
+    if not item_name or not item_description or not year or not month or not day or not location:
+        messagebox.showerror("Error", "Please fill in all fields!")  # Show error message
+        return
+
+    try:
+        # Check whether the time is reasonable
+        year = int(year)
+        month = int(month)
+        day = int(day)
+
+        if month < 1 or month > 12:
+            raise ValueError("Invalid month")
+        if day < 1 or day > 31:
+            raise ValueError("Invalid day")
+
+        # Check the validity of the number of days (simple check, without considering leap years, etc.)
+        if month in [4, 6, 9, 11] and day > 30:
+            raise ValueError("Invalid day for the given month")
+        if month == 2 and day > 29:
+            raise ValueError("Invalid day for February")
+
+        found_time = f"{year}-{month:02d}-{day:02d}"
+        report_item(report_window, username, item_name, item_description, found_time, location)
+
+    except ValueError:
+        messagebox.showerror("Error", "Please enter the correct time!")
+
+
+def create_report_item_window_admin():
+    report_window = tk.Toplevel()
+    report_window.title("Report Lost Item - Admin")
+
+    tk.Label(report_window, text="Item Name").grid(row=0)
+    tk.Label(report_window, text="Item Description").grid(row=1)
+    tk.Label(report_window, text="Found Time (YYYY-MM-DD)").grid(row=2)
+    tk.Label(report_window, text="Found Location").grid(row=3)
+
+    item_name_entry = tk.Entry(report_window)
+    item_description_text = tk.Text(report_window, height=5, width=40)  # Multi-line text box
+    found_year_entry = tk.Entry(report_window, width=4)  # 年
+    found_month_entry = tk.Entry(report_window, width=2)  # 月
+    found_day_entry = tk.Entry(report_window, width=2)  # 日
+    found_location_entry = tk.Entry(report_window)
+
+    item_name_entry.grid(row=0, column=1)
+    item_description_text.grid(row=1, column=1)
+    found_year_entry.grid(row=2, column=1)
+    found_month_entry.grid(row=2, column=2)
+    found_day_entry.grid(row=2, column=3)
+    found_location_entry.grid(row=3, column=1)
+
+    def complete_report():
+        item_name = item_name_entry.get().strip()
+        item_description = item_description_text.get("1.0", tk.END).strip()
+        year = found_year_entry.get().strip()
+        month = found_month_entry.get().strip()
+        day = found_day_entry.get().strip()
+        found_location = found_location_entry.get().strip()
+
+        # Check if any field is empty
+        if not item_name or not item_description or not year or not month or not day or not found_location:
+            messagebox.showerror("Error", "Fields cannot be empty!")  # Show error message
+            return
+
+        try:
+            # Check whether the time is reasonable
+            year = int(year)
+            month = int(month)
+            day = int(day)
+
+            if month < 1 or month > 12:
+                raise ValueError("Invalid month")
+            if day < 1 or day > 31:
+                raise ValueError("Invalid day")
+
+            # Check the validity of the number of days (simple check, without considering leap years, etc.)
+            if month in [4, 6, 9, 11] and day > 30:
+                raise ValueError("Invalid day for the given month")
+            if month == 2 and day > 29:
+                raise ValueError("Invalid day for February")
+
+            found_time = f"{year}-{month:02d}-{day:02d}"
+            report_item(report_window, "admin", item_name, item_description, found_time, found_location)
+
+        except ValueError:
+            messagebox.showerror("Error", "Please enter the correct time!")
+
+    tk.Button(report_window, text='Complete', command=complete_report).grid(row=4, column=0)
+    tk.Button(report_window, text='Return to Main Menu', command=report_window.destroy).grid(row=4, column=1)
+
+
+def report_item(report_window, username, item_name, item_description, found_time, found_location):
+    item_id: str = f"A{len(lost_items) + 1:06d}"  # Generate unique item ID, format as "A000001"
+
+    # Append the new item to the lost_items list
+    lost_items.append({
+        "item_id": item_id,
+        "name": item_name,
+        "description": item_description,
+        "time": found_time,
+        "location": found_location,
+        "reported_user": username,
+        "status": "Unclaimed",
+        "claimed_user": None,
+        "pending": False  # New field to indicate pending status
+    })
+
+    messagebox.showinfo("Success", "Item reported successfully!")
+    report_window.destroy()  # Close report window
+
+
+def create_claim_item_window():
+    claim_window = tk.Toplevel()
+    claim_window.title("Claim Item")
+
+    if not lost_items:
+        messagebox.showinfo("Info", "No items available for claim.")
+        return
+
+    claims_per_page = 15
+    current_claim_page = 0
+    filtered_claims = lost_items[:]  # Initialize with all items
+
+    def change_claim_page(direction):
+        nonlocal current_claim_page
+        if direction == -1 and current_claim_page > 0:
+            current_claim_page -= 1
+        elif direction == 1 and (current_claim_page + 1) * claims_per_page < len(filtered_claims):
+            current_claim_page += 1
+        display_claim_items()
+
+    def display_claim_items():
+        for widget in claim_window.winfo_children():
+            widget.destroy()
+
+        tk.Label(claim_window, text="Items Available for Claim").grid(row=0, column=0, columnspan=4)
+
+        # Search box
+        tk.Label(claim_window, text="Search:").grid(row=1, column=0)
+        search_var = tk.StringVar()
+        tk.Entry(claim_window, textvariable=search_var).grid(row=1, column=1)
+
+        # Search category selection
+        search_category = tk.StringVar(value="name")  # Default to search by name
+        tk.OptionMenu(claim_window, search_category, "name", "location").grid(row=1, column=2)
+
+        tk.Button(claim_window, text='Search',
+                  command=lambda: filter_claim_items(search_var.get(), search_category.get())).grid(row=1, column=3)
+
+        start_index = current_claim_page * claims_per_page
+        end_index = start_index + claims_per_page
+        paginated_claims = filtered_claims[start_index:end_index]
+
+        for idx, item in enumerate(paginated_claims):
+            tk.Label(claim_window, text=f"{start_index + idx + 1}. {item['name']} - Location: {item['location']}").grid(
+                row=idx + 2, column=0)
+            tk.Button(claim_window, text='View Details',
+                      command=lambda item=item: view_item_details(item, claim_window)).grid(row=idx + 2, column=1)
+
+        # Pagination buttons
+        tk.Button(claim_window, text='Previous Page', command=lambda: change_claim_page(-1)).grid(
+            row=len(paginated_claims) + 2, column=0)
+        tk.Button(claim_window, text='Next Page', command=lambda: change_claim_page(1)).grid(
+            row=len(paginated_claims) + 2, column=2)
+
+    def filter_claim_items(search_term, category):
+        nonlocal filtered_claims, current_claim_page
+        search_term = search_term.strip().lower()
+        if category == "name":
+            filtered_claims = [item for item in lost_items if search_term in item['name'].lower()]
+        elif category == "location":
+            filtered_claims = [item for item in lost_items if search_term in item['location'].lower()]
+
+        current_claim_page = 0  # Reset to the first page
+        display_claim_items()
+
+    display_claim_items()
+
+
+def view_item_details(item, claim_window):
+    details_window = tk.Toplevel()
+    details_window.title("Item Details")
+
+    tk.Label(details_window, text=f"Item Name: {item['name']}").grid(row=0)
+    tk.Label(details_window, text=f"Item Description: {item['description']}").grid(row=1)
+    tk.Label(details_window, text=f"Found Time: {item['time']}").grid(row=2)
+    tk.Label(details_window, text=f"Found Location: {item['location']}").grid(row=3)
+
+    tk.Button(details_window, text='Claim', command=lambda: claim_item(item, details_window, claim_window)).grid(row=4,
+                                                                                                                 column=0)
+    tk.Button(details_window, text='Close', command=details_window.destroy).grid(row=4, column=1)
+
+
+def claim_item(item, details_window, claim_window):
+    if item['status'] == "Claimed":
+        messagebox.showinfo("Info", "This item has already been claimed.")
+    else:
+        item['status'] = "Pending Confirmation"  # Change to pending confirmation status
+        item['claimed_user'] = item['user']  # Assume claiming user is the current logged-in user
+        lost_items.remove(item)  # Remove from claimable list
+        lost_items.append(item)  # Add to pending list
+        messagebox.showinfo("Success", "Item claimed successfully, awaiting admin confirmation!")
+        details_window.destroy()  # Close details window
+        claim_window.destroy()  # Close claim window and return to main menu
+
+
+def create_user_items_window(username):
+    user_items_window = tk.Toplevel()
+    user_items_window.title("My Registered Lost Items")
+
+    user_items = [item for item in lost_items if item['reported_user'] == username]
+
+    if not user_items:
+        messagebox.showinfo("Info", "You have not reported any lost items.")
+        return
+
+    tk.Label(user_items_window, text="Your Reported Lost Items").grid(row=0, column=0)
+
+    for idx, item in enumerate(user_items):
+        tk.Label(user_items_window, text=f"{idx + 1}. {item['name']} - Status: {item['status']}").grid(row=idx + 1,
+                                                                                                       column=0)
+        tk.Button(user_items_window, text='Edit', command=lambda item=item: edit_user_item(item)).grid(row=idx + 1,
+                                                                                                       column=1)
+        tk.Button(user_items_window, text='Delete', command=lambda item=item: delete_user_item(item)).grid(row=idx + 1,
+                                                                                                           column=2)
+
+
+def edit_user_item(item):
+    edit_window = tk.Toplevel()
+    edit_window.title("Edit Item")
+
+    tk.Label(edit_window, text="Item Name").grid(row=0)
+    tk.Label(edit_window, text="Item Description").grid(row=1)
+    tk.Label(edit_window, text="Found Time").grid(row=2)
+    tk.Label(edit_window, text="Found Location").grid(row=3)
+
+    item_name_entry = tk.Entry(edit_window)
+    item_description_text = tk.Text(edit_window, height=5, width=40)  # Multi-line text box
+    found_time_entry = tk.Entry(edit_window)
+    found_location_entry = tk.Entry(edit_window)
+
+    item_name_entry.insert(0, item['name'])
+    item_description_text.insert("1.0", item['description'])  # Set initial text
+    found_time_entry.insert(0, item['time'])
+    found_location_entry.insert(0, item['location'])
+
+    item_name_entry.grid(row=0, column=1)
+    item_description_text.grid(row=1, column=1)
+    found_time_entry.grid(row=2, column=1)
+    found_location_entry.grid(row=3, column=1)
+
+    tk.Button(edit_window, text='Save', command=lambda: save_user_item(item, edit_window, item_name_entry.get(),
+                                                                       item_description_text.get("1.0", tk.END).strip(),
+                                                                       found_time_entry.get(),
+                                                                       found_location_entry.get())).grid(row=4,
+                                                                                                         column=0)
+    tk.Button(edit_window, text='Close', command=edit_window.destroy).grid(row=4, column=1)
+
+
+def save_user_item(item, edit_window, name, description, time, location):
+    item['name'] = name
+    item['description'] = description
+    item['time'] = time
+    item['location'] = location
+    messagebox.showinfo("Success", "Item information updated!")
+    edit_window.destroy()  # Close edit window
+
+
+def delete_user_item(item):
+    lost_items.remove(item)
+    messagebox.showinfo("Success", "Item deleted!")
+
+
+def create_manage_items_window():
+    manage_window = tk.Toplevel()
+    manage_window.title("Manage Lost Items")
+
+    if not lost_items:
+        messagebox.showinfo("Info", "No lost item information.")
+        return
+
+    items_per_page = 15
+    current_page = 0
+    filtered_items = lost_items[:]  # Initialize with all items
+
+    def change_page(direction):
+        nonlocal current_page
+        if direction == -1 and current_page > 0:
+            current_page -= 1
+        elif direction == 1 and (current_page + 1) * items_per_page < len(filtered_items):
+            current_page += 1
+        display_items()
+
+    def display_items():
+        for widget in manage_window.winfo_children():
+            widget.destroy()
+
+        tk.Label(manage_window, text="All Lost Items").grid(row=0, column=0, columnspan=3)
+
+        # Search box
+        tk.Label(manage_window, text="Search:").grid(row=1, column=0)
+        search_var = tk.StringVar()
+        tk.Entry(manage_window, textvariable=search_var).grid(row=1, column=1)
+
+        # Search category selection
+        search_category = tk.StringVar(value="name")  # Default to search by name
+        tk.OptionMenu(manage_window, search_category, "name", "location").grid(row=1, column=2)
+
+        tk.Button(manage_window, text='Search',
+                  command=lambda: filter_items(search_var.get(), search_category.get())).grid(row=1, column=3)
+
+        start_index = current_page * items_per_page
+        end_index = start_index + items_per_page
+        paginated_items = filtered_items[start_index:end_index]
+
+        for idx, item in enumerate(paginated_items):
+            tk.Label(manage_window,
+                     text=f"{start_index + idx + 1}. {item['name']} - Status: {item['status']} - Location: {item['location']}").grid(
+                row=idx + 2, column=0)
+            tk.Button(manage_window, text='Edit', command=lambda item=item: edit_item(item)).grid(row=idx + 2, column=1)
+            tk.Button(manage_window, text='Delete', command=lambda item=item: delete_item(item)).grid(row=idx + 2,
+                                                                                                      column=2)
+
+        # Pagination buttons
+        tk.Button(manage_window, text='Previous Page', command=lambda: change_page(-1)).grid(
+            row=len(paginated_items) + 2, column=0)
+        tk.Button(manage_window, text='Next Page', command=lambda: change_page(1)).grid(row=len(paginated_items) + 2,
+                                                                                        column=2)
+
+    def filter_items(search_term, category):
+        nonlocal filtered_items, current_page
+        search_term = search_term.strip().lower()
+        if category == "name":
+            filtered_items = [item for item in lost_items if search_term in item['name'].lower()]
+        elif category == "location":
+            filtered_items = [item for item in lost_items if search_term in item['location'].lower()]
+
+        current_page = 0  # Reset to the first page
+        display_items()
+
+    display_items()
+
+
+def edit_item(item):
+    edit_window = tk.Toplevel()
+    edit_window.title("Edit Item")
+
+    tk.Label(edit_window, text="Item Name").grid(row=0)
+    tk.Label(edit_window, text="Item Description").grid(row=1)
+    tk.Label(edit_window, text="Found Time").grid(row=2)
+    tk.Label(edit_window, text="Found Location").grid(row=3)
+
+    item_name_entry = tk.Entry(edit_window)
+    item_description_text = tk.Text(edit_window, height=5, width=40)  # Multi-line text box
+    found_time_entry = tk.Entry(edit_window)
+    found_location_entry = tk.Entry(edit_window)
+
+    item_name_entry.insert(0, item['name'])
+    item_description_text.insert("1.0", item['description'])  # Set initial text
+    found_time_entry.insert(0, item['time'])
+    found_location_entry.insert(0, item['location'])
+
+    item_name_entry.grid(row=0, column=1)
+    item_description_text.grid(row=1, column=1)
+    found_time_entry.grid(row=2, column=1)
+    found_location_entry.grid(row=3, column=1)
+
+    tk.Button(edit_window, text='Save', command=lambda: save_item(item, edit_window, item_name_entry.get(),
+                                                                  item_description_text.get("1.0", tk.END).strip(),
+                                                                  found_time_entry.get(),
+                                                                  found_location_entry.get())).grid(row=4, column=0)
+    tk.Button(edit_window, text='Close', command=edit_window.destroy).grid(row=4, column=1)
+
+
+def save_item(item, edit_window, name, description, time, location):
+    item['name'] = name
+    item['description'] = description
+    item['time'] = time
+    item['location'] = location
+    messagebox.showinfo("Success", "Item information updated!")
+    edit_window.destroy()  # Close edit window
+
+
+def delete_item(item):
+    lost_items.remove(item)
+    messagebox.showinfo("Success", "Item deleted!")
+
+
+def create_pending_claims_window():
+    pending_window = tk.Toplevel()
+    pending_window.title("Pending Claims")
+
+    pending_items = [item for item in lost_items if item['status'] == "Pending Confirmation"]
+
+    if not pending_items:
+        messagebox.showinfo("Info", "No items pending confirmation.")
+        return
+
+    tk.Label(pending_window, text="Items Pending Confirmation").grid(row=0, column=0)
+
+    for idx, item in enumerate(pending_items):
+        tk.Label(pending_window, text=f"{idx + 1}. {item['name']} - Location: {item['location']}").grid(row=idx + 1,
+                                                                                                        column=0)
+        tk.Button(pending_window, text='Confirm Claim',
+                  command=lambda item=item: confirm_claim(item, pending_window)).grid(row=idx + 1, column=1)
+        tk.Button(pending_window, text='Cancel Claim',
+                  command=lambda item=item: cancel_claim(item, pending_window)).grid(row=idx + 1, column=2)
+
+
+def confirm_claim(item, pending_window):
+    item['status'] = "Claimed"  # Confirm claim
+    messagebox.showinfo("Success", "Item claim has been confirmed!")
+    pending_window.destroy()  # Close pending window
+
+
+def cancel_claim(item, pending_window):
+    item['status'] = "Unclaimed"  # Cancel claim
+    item['claimed_user'] = None  # Clear claimed user
+    messagebox.showinfo("Success", "Item claim has been canceled, returning to lost item list!")
+    pending_window.destroy()  # Close pending window
+
+
+create_login_window()  # Start the program
