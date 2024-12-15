@@ -1,0 +1,54 @@
+import random
+from datetime import datetime, timedelta
+import pandas as pd  # 导入pandas库
+
+
+item_names = ["Key", "Wallet", "Phone", "Book", "Watch", "Headphones", "Backpack", "Water Bottle", "Glasses", "Clothes"]
+colors = ["Black", "White", "Red", "Blue", "Green", "Yellow", "Purple", "Orange", "Gray"]
+
+
+locations = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T29"]
+
+
+def generate_random_date(index):
+    start_date = datetime.now() - timedelta(days=30)
+    return start_date + timedelta(days=index)
+
+
+def generate_lost_items(num_items):
+    lost_items = []
+    for i in range(num_items):
+        item_name = random.choice(item_names)
+        color = random.choice(colors)
+      
+        description = f"It is a {color} {item_name}."
+
+        item_id = f"A{str(i + 1).zfill(6)}"
+
+        item = {
+            "item_id": item_id,
+            "name": item_name,
+            "description": description,
+            "time": generate_random_date(i).strftime("%Y-%m-%d %H:%M:%S"),
+            "location": random.choice(locations),
+            "reported_user": "admin", 
+            "status": "Unclaimed",
+            "claimed_user": None,
+            "pending": False
+        }
+        lost_items.append(item)
+
+    lost_items.sort(key=lambda x: x["time"])
+    return lost_items
+
+
+
+lost_items_database = generate_lost_items(100)
+
+
+df = pd.DataFrame(lost_items_database)
+
+
+df.to_excel("lostfound.xlsx", index=False)
+
+print("Lost items database has been saved to lostfound.xlsx")
